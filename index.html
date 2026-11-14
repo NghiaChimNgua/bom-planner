@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Enter a production plan and bill of material to get a 12-month direct-material purchasing budget, safety stock and monthly PO dates.">
+<title>BOM Purchasing Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: worksheet tool. Input sheet on the left (stacks on top when narrow), live results on the right; summary first, detail tables after. */
+:root {
+  --paper: #f5f7f5;
+  --sheet: #ffffff;
+  --ink: #15201a;
+  --muted: #56645c;
+  --line: #d3dcd6;
+  --field: #fbfcfb;
+  --tint: #edf2ee;
+  --accent: #1c6a4d;
+  --accent-ink: #ffffff;
+  --accent-soft: #d9ebe2;
+  --copper: #9a5a24;
+  --bar-rest: #b7c6bd;
+  --warn: #b3261e;
+  --warn-soft: #fbe9e7;
+  --copper-soft: #f6ebdf;
+  /* A4 notice: printed paper, light in both themes on purpose */
+  --p-paper: #ffffff; --p-ink: #15201a; --p-muted: #56645c; --p-line: #d3dcd6; --p-tint: #edf2ee;
+  --p-accent: #1c6a4d; --p-copper: #9a5a24; --p-warn: #b3261e;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1411; --sheet: #141c18; --ink: #e2eae5; --muted: #98a79f; --line: #2a3831;
+    --field: #101814; --tint: #18221d; --accent: #5cc496; --accent-ink: #08130e; --accent-soft: #183326;
+    --copper: #dd9a62; --bar-rest: #3d4c44; --warn: #f2948b; --warn-soft: #3a1714; --copper-soft: #33240f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1411; --sheet: #141c18; --ink: #e2eae5; --muted: #98a79f; --line: #2a3831;
+  --field: #101814; --tint: #18221d; --accent: #5cc496; --accent-ink: #08130e; --accent-soft: #183326;
+  --copper: #dd9a62; --bar-rest: #3d4c44; --warn: #f2948b; --warn-soft: #3a1714; --copper-soft: #33240f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 16px;
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1240px; margin-inline: auto; display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 1.4rem + 2vw, 2.6rem); font-weight: 800; }
+h2 { font-size: 1.35rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 650; }
+p { margin: 0; }
+.eyebrow { font: 600 0.74rem/1.3 var(--font-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+
+header.top { display: grid; gap: 10px; max-width: 70ch; }
+.dek { color: var(--muted); font-size: 1.02rem; }
+.example-note { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 0.88rem; color: var(--muted); }
+.example-note strong { color: var(--ink); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (min-width: 1000px) {
+  .layout { grid-template-columns: 400px minmax(0, 1fr); }
+  .inputs { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow-y: auto; }
+}
+
+/* input sheet */
+.inputs { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 22px; min-width: 0; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0; }
+legend { padding: 0; margin-bottom: 4px; font: 700 1.05rem/1.2 var(--font-display); font-stretch: 85%; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 0.85rem; font-weight: 500; }
+.hint { font-size: 0.78rem; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+input, select {
+  font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[aria-invalid="true"] { border-color: var(--warn); background: var(--warn-soft); }
+
+.bom-head, .bom-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px 86px 30px; gap: 6px; align-items: center; }
+.bom-head { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+.bom-head span:nth-child(2), .bom-head span:nth-child(3) { text-align: right; }
+.bom-row input.n { text-align: right; }
+.bom-list { display: grid; gap: 6px; }
+button { font: 500 0.85rem/1 var(--font-body); cursor: pointer; border-radius: 6px; padding: 8px 12px; }
+.btn { background: var(--sheet); color: var(--accent); border: 1px solid var(--accent); }
+.btn:hover { background: var(--accent-soft); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.armed { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+.icon-btn { width: 30px; height: 32px; padding: 0; background: none; border: 1px solid transparent; color: var(--muted); font-size: 1.1rem; }
+.icon-btn:hover { color: var(--warn); border-color: var(--line); }
+.icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.bom-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.unit-cost { font-size: 0.9rem; }
+.unit-cost strong { font-variant-numeric: tabular-nums; }
+.sheet-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); padding-block: 14px 0; }
+
+/* results */
+.results { display: grid; gap: 30px; min-width: 0; transition: opacity 0.15s; }
+.results.stale .block { opacity: 0.45; }
+.errors { border: 1px solid var(--warn); background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; font-size: 0.9rem; }
+.errors strong { color: var(--warn); }
+.errors ul { margin: 0; padding-left: 1.2em; }
+.block { display: grid; gap: 12px; min-width: 0; }
+.block-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+@media (min-width: 720px) { .summary { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.summary div { background: var(--sheet); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.summary dt { font-size: 0.78rem; color: var(--muted); }
+.summary dd { margin: 0; font: 700 1.3rem/1.2 var(--font-display); font-stretch: 90%; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.summary .lead dd { color: var(--accent); }
+.summary .chip { justify-self: start; }
+
+.bars { display: grid; gap: 9px; background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.bar-row { display: grid; grid-template-columns: minmax(70px, 140px) minmax(0, 1fr) 128px; gap: 12px; align-items: center; font-size: 0.88rem; }
+.bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 14px; background: var(--tint); border-radius: 3px; overflow: hidden; }
+.bar { height: 100%; background: var(--bar-rest); border-radius: 3px; }
+.bar.a { background: var(--accent); }
+.bar-val { text-align: right; font-variant-numeric: tabular-nums; }
+.bar-val span { color: var(--muted); font-size: 0.8rem; }
+.axis { display: grid; grid-template-columns: minmax(70px, 140px) minmax(0, 1fr) 128px; gap: 12px; font-size: 0.72rem; color: var(--muted); }
+.axis .ticks { position: relative; height: 1.2em; }
+.axis .ticks span { position: absolute; top: 0; transform: translateX(-50%); }
+.axis .ticks span:first-child { transform: none; }
+.axis .ticks span:last-child { transform: translateX(-100%); }
+@media (max-width: 560px) {
+  .bar-row, .axis { grid-template-columns: 84px minmax(0, 1fr) 64px; gap: 8px; }
+  .bar-val span { display: none; }
+}
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 11px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child, th.left, td.left { text-align: left; }
+thead th { font-weight: 600; font-size: 0.76rem; color: var(--muted); background: var(--tint); }
+tbody tr:last-child td { border-bottom: 0; }
+tr.total td { font-weight: 600; border-top: 1px solid var(--ink); }
+.chip { display: inline-block; font-size: 0.72rem; line-height: 1.5; padding: 0 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; font-weight: 500; font-family: var(--font-body); font-stretch: 100%; }
+.chip.copper { background: transparent; border: 1px solid var(--copper); color: var(--copper); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.caption { font-size: 0.84rem; color: var(--muted); }
+.copy-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.copy-status { font-size: 0.8rem; color: var(--muted); }
+textarea.fallback { width: 100%; min-height: 90px; font: 0.78rem/1.4 var(--font-mono); background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+
+details.method { border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+details.method summary { cursor: pointer; padding: 12px 16px; font-weight: 600; }
+details.method .body { padding: 0 16px 16px; display: grid; gap: 8px; font-size: 0.9rem; max-width: 72ch; }
+details.method ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--tint); padding: 1px 5px; border-radius: 4px; }
+footer { font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .results { transition: none; } }
+
+/* order reminders */
+.alert { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
+.alert.soon { border-color: var(--copper); background: var(--copper-soft); }
+.alert.late { border-color: var(--warn); background: var(--warn-soft); }
+.alert-title { font: 700 1.05rem/1.3 var(--font-display); font-stretch: 90%; }
+.alert p { font-size: 0.88rem; color: var(--muted); max-width: 72ch; }
+.alert ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.alert li { display: flex; justify-content: space-between; align-items: center; gap: 8px 14px; flex-wrap: wrap; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.btn.small { padding: 6px 10px; font-size: 0.78rem; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chip.soon { background: var(--copper-soft); color: var(--copper); border: 1px solid var(--copper); }
+.chip.done { background: var(--tint); color: var(--muted); }
+.chip.later { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+td > .chip:first-child { margin-left: 0; }
+tr.done td { color: var(--muted); }
+input[type="checkbox"] { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: var(--accent); vertical-align: middle; cursor: pointer; }
+
+/* A4 order notice */
+body.notice-open .wrap { display: none; }
+#notice-view { display: grid; gap: 14px; }
+.notice-toolbar { max-width: 210mm; width: 100%; margin-inline: auto; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.notice-toolbar .group { display: flex; gap: 8px; flex-wrap: wrap; }
+.sheet { width: 100%; max-width: 210mm; margin-inline: auto; background: var(--p-paper); color: var(--p-ink); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(10, 30, 20, 0.12); padding: 22px 18px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; line-height: 1.45; color-scheme: light; }
+@media (min-width: 840px) { .sheet { min-height: 297mm; padding: 14mm 14mm 12mm; } }
+.sheet h1 { font: 800 23px/1.15 var(--font-display); font-stretch: 85%; }
+.sheet h2 { font: 600 11px/1.2 var(--font-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--p-muted); }
+.n-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 14px; border-bottom: 2px solid var(--p-ink); }
+.n-eyebrow { font: 600 11px/1.3 var(--font-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--p-accent); margin-bottom: 6px; }
+.n-sub { color: var(--p-muted); margin-top: 6px; }
+.stamp { flex: none; border: 2.5px solid currentColor; border-radius: 6px; padding: 7px 12px 6px; text-align: center; transform: rotate(-4deg); color: var(--p-accent); display: grid; gap: 3px; margin-top: 4px; }
+.stamp span { font: 800 18px/1 var(--font-display); font-stretch: 80%; letter-spacing: 0.08em; text-transform: uppercase; }
+.stamp small { font: 600 10px/1.2 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; }
+.stamp.soon { color: var(--p-copper); }
+.stamp.late, .stamp.today { color: var(--p-warn); }
+.stamp.placed { color: var(--p-muted); }
+.n-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--p-line); border: 1px solid var(--p-line); margin: 0; }
+.n-tiles div { background: var(--p-paper); padding: 10px 12px; display: grid; gap: 2px; align-content: start; }
+.n-tiles div.key { background: var(--p-tint); }
+.n-tiles dt { font-size: 11px; color: var(--p-muted); }
+.n-tiles dd { margin: 0; font: 700 17px/1.2 var(--font-display); font-stretch: 90%; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.n-tiles small { font-size: 11px; color: var(--p-muted); }
+.n-progress, .n-items, .n-notes { display: grid; gap: 8px; }
+.n-row { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+.segs { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
+.seg { height: 22px; border-radius: 3px; border: 1px solid var(--p-line); font: 600 10px/20px var(--font-mono); text-align: center; color: var(--p-muted); background: var(--p-paper); }
+.seg.placed { background: var(--p-accent); border-color: var(--p-accent); color: var(--p-paper); }
+.seg.late, .seg.today { border-color: var(--p-warn); color: var(--p-warn); }
+.seg.soon { border-color: var(--p-copper); color: var(--p-copper); }
+.seg.current { outline: 2px solid var(--p-ink); outline-offset: 1px; }
+.n-bar { height: 6px; background: var(--p-tint); border-radius: 3px; overflow: hidden; }
+.n-bar span { display: block; height: 100%; background: var(--p-accent); }
+.n-items .tbl { overflow-x: auto; }
+.n-items table { font-size: 12px; }
+.n-items th, .n-items td { padding: 6px 8px; border-bottom: 1px solid var(--p-line); }
+.n-items thead th { background: var(--p-tint); color: var(--p-muted); font-size: 10.5px; }
+.n-items tr.total td { border-top: 1.5px solid var(--p-ink); }
+.mini { display: inline-block; width: 46px; height: 6px; background: var(--p-tint); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.mini span { display: block; height: 100%; background: var(--p-accent); }
+.n-notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.n-fill { display: grid; gap: 10px; }
+.fill-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; }
+.fill-grid div { display: grid; gap: 2px; }
+.fill-grid span { font-size: 11px; color: var(--p-muted); }
+.fill-grid div::after { content: ""; height: 26px; border-bottom: 1px solid var(--p-line); }
+.n-sign { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: auto; padding-top: 10px; }
+.n-sign div { display: grid; gap: 4px; }
+.n-sign div::before { content: ""; height: 40px; border-bottom: 1px solid var(--p-ink); }
+.n-sign span { font-size: 11px; color: var(--p-muted); }
+.n-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--p-muted); border-top: 1px solid var(--p-line); padding-top: 8px; }
+@media (max-width: 560px) {
+  .n-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .n-head { flex-direction: column; }
+  .n-sign, .fill-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media print {
+  @page { size: A4; margin: 0; }
+  html, body { background: #ffffff; }
+  body { padding: 0; }
+  body.notice-open .notice-toolbar { display: none; }
+  body.notice-open #notice-view { display: block; }
+  .sheet { max-width: none; width: 210mm; min-height: 296mm; border: 0; box-shadow: none; padding: 14mm 14mm 12mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Direct-material purchasing</div>
+    <h1>BOM Purchasing Planner</h1>
+    <p class="dek">Enter a production plan and a bill of material. The planner works out the 12-month purchasing budget, the safety stock, and the latest date to place each monthly purchase order. It reminds you when an order is due and makes an A4 notice for each order.</p>
+    <div class="example-note" id="example-note">
+      <span><strong>Example loaded:</strong> ABC company's CPU line in Saigon Hi-Tech Park (Procurement Ch1 case). Replace the numbers with your own.</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <form class="inputs" id="inputs" novalidate>
+      <fieldset>
+        <legend>Production plan</legend>
+        <div class="field">
+          <label for="product">Product name</label>
+          <input id="product" type="text" autocomplete="off" maxlength="40">
+          <span class="hint">Used in labels, for example "cost per CPU".</span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="start-month">First production month</label>
+            <select id="start-month">
+              <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+              <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+              <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+              <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="start-year">Year</label>
+            <input id="start-year" type="text" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label for="per-quarter">Production per quarter (units)</label>
+          <input id="per-quarter" type="text" inputmode="numeric" autocomplete="off">
+          <span class="hint">Spread evenly over the 3 months of each quarter. A quarter counts as 13 weeks.</span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="lead-weeks">Lead time (weeks)</label>
+            <input id="lead-weeks" type="text" inputmode="numeric" autocomplete="off">
+            <span class="hint">Use the longest time the supplier quotes.</span>
+          </div>
+          <div class="field">
+            <label for="safety-weeks">Safety stock (weeks)</label>
+            <input id="safety-weeks" type="text" inputmode="decimal" autocomplete="off">
+            <span class="hint">Weeks of usage kept as a buffer.</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="remind-days">Remind me (days before each order date)</label>
+          <input id="remind-days" type="text" inputmode="numeric" autocomplete="off">
+          <span class="hint">Orders inside this window show as due. The calendar reminders use it too.</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Bill of material, per 1 <span id="legend-product">unit</span></legend>
+        <div class="bom-head" aria-hidden="true"><span>Item</span><span>Qty</span><span>Price USD</span><span></span></div>
+        <div class="bom-list" id="bom-list"></div>
+        <div class="bom-foot">
+          <button type="button" class="btn" id="add-item">Add item</button>
+          <span class="unit-cost">Material cost per <span class="product-label">unit</span>: <strong id="unit-cost">–</strong></span>
+        </div>
+        <span class="hint">Use a point for decimals, for example 0.05.</span>
+      </fieldset>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn" id="load-example">Load the CPU example</button>
+      </div>
+    </form>
+
+    <div class="results" id="results" aria-live="polite">
+      <div class="errors" id="errors" hidden></div>
+
+      <section class="block" aria-labelledby="alert-h">
+        <h2 id="alert-h" class="eyebrow" style="font-family:var(--font-body);font-size:0.74rem;font-stretch:100%;">Order reminders</h2>
+        <div class="alert" id="alert"></div>
+        <div class="copy-row"><button type="button" class="btn primary" id="download-ics">Add reminders to my calendar</button><span class="copy-status" id="ics-status" aria-live="polite"></span></div>
+        <p class="caption">Downloads a calendar file (.ics) with one event on each order date that is not placed yet. Each event lists the items to order and has two reminders: one before the date and one at 9:00 on the day. Open the file to add it to Google Calendar, Outlook or Apple Calendar, and your phone notifies you even when this page is closed.</p>
+      </section>
+
+      <section class="block" aria-labelledby="sum-h">
+        <h2 id="sum-h" class="eyebrow" style="font-family:var(--font-body);font-size:0.74rem;font-stretch:100%;">Answer</h2>
+        <dl class="summary" id="summary"></dl>
+        <p class="caption" id="summary-caption"></p>
+      </section>
+
+      <section class="block" aria-labelledby="spend-h">
+        <h2 id="spend-h">Where the money goes</h2>
+        <div class="bars" id="bars" role="img"></div>
+        <p class="caption">Green bars are the A items: the biggest spend items that together make up about 80% of the budget. They need the closest price negotiation and supplier follow-up.</p>
+      </section>
+
+      <section class="block" aria-labelledby="item-h">
+        <div class="block-head">
+          <h2 id="item-h">Budget by item</h2>
+          <div class="copy-row"><button type="button" class="btn" id="copy-items">Copy for Excel</button><span class="copy-status" id="copy-items-status" aria-live="polite"></span></div>
+        </div>
+        <div class="table-wrap" id="items-table"></div>
+        <textarea class="fallback" id="copy-items-fallback" hidden readonly aria-label="Budget by item as tab-separated text"></textarea>
+      </section>
+
+      <section class="block" aria-labelledby="po-h">
+        <div class="block-head">
+          <h2 id="po-h">Purchase order schedule</h2>
+          <div class="copy-row"><button type="button" class="btn" id="copy-po">Copy for Excel</button><span class="copy-status" id="copy-po-status" aria-live="polite"></span></div>
+        </div>
+        <div class="table-wrap" id="po-table"></div>
+        <textarea class="fallback" id="copy-po-fallback" hidden readonly aria-label="Purchase order schedule as tab-separated text"></textarea>
+        <p class="caption" id="po-caption"></p>
+      </section>
+
+      <section class="block" aria-labelledby="q-h">
+        <h2 id="q-h">Budget by quarter</h2>
+        <div class="table-wrap" id="quarter-table"></div>
+      </section>
+
+      <details class="method">
+        <summary>How the numbers are worked out</summary>
+        <div class="body">
+          <ul>
+            <li><strong>Material cost per unit</strong> = sum of quantity × price over all BOM items.</li>
+            <li><strong>Monthly production</strong> = production per quarter ÷ 3. Any remainder goes to the first month of the quarter, so each quarter adds up exactly.</li>
+            <li><strong>Safety stock</strong> = production per quarter ÷ 13 weeks × safety weeks, rounded up to whole sets. It arrives with the first order and is still on hand at the end of the 12 months.</li>
+            <li><strong>Purchases</strong> = production + ending stock − opening stock. The opening stock is taken as 0 (a new line).</li>
+            <li><strong>Latest PO date</strong> = first day of the month that uses the material − lead time. A date on a Saturday or Sunday moves back to the Friday before.</li>
+            <li><strong>A items</strong>: items sorted by spend; an item is A while the items before it make up less than 80% of the budget.</li>
+            <li>Not included: scrap or yield loss, minimum order quantities, freight, insurance, import duty and price breaks.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <footer>Numbers you type and the orders you mark as placed are saved only in this browser. Nobody else can see them. Based on the Procurement Chapter 1 case study.</footer>
+</div>
+
+<div id="notice-view" hidden>
+  <div class="notice-toolbar">
+    <button type="button" class="btn" id="notice-close">Back to the planner</button>
+    <strong id="notice-title"></strong>
+    <div class="group">
+      <button type="button" class="btn" id="notice-prev">Previous order</button>
+      <button type="button" class="btn" id="notice-next">Next order</button>
+      <button type="button" class="btn primary" id="notice-print">Print or save as PDF</button>
+    </div>
+  </div>
+  <article class="sheet" id="notice-sheet" aria-labelledby="notice-title"></article>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE_KEY = "bom-purchasing-planner-v1";
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var DAY_MS = 86400000;
+
+  var EXAMPLE = {
+    product: "CPU", startMonth: "0", startYear: "2027", perQuarter: "1,000,000",
+    leadWeeks: "6", safetyWeeks: "1", remindDays: "7",
+    bom: [
+      { name: "Substrate", qty: "1", price: "3" },
+      { name: "Capacitor A", qty: "10", price: "0.10" },
+      { name: "Capacitor B", qty: "4", price: "0.10" },
+      { name: "Solder ball", qty: "30", price: "0.05" },
+      { name: "Die", qty: "1", price: "10" }
+    ]
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var state = null;
+  var nextRowId = 1;
+  var lastResult = null;
+  var lastInput = null;
+  var PLACED_KEY = "bom-purchasing-planner-placed-v1";
+  var placedMap = null;
+  var noticeIndex = null;
+  var returnScroll = 0;
+
+  // ---------- formatting ----------
+  var fmtQty = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+  var fmtMoney = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var fmtPct = new Intl.NumberFormat("en-US", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  function money(x) { return fmtMoney.format(x); }
+  function qty(x) { return fmtQty.format(x); }
+  function pct(x) { return fmtPct.format(x); }
+  function short(x) {
+    if (Math.abs(x) >= 1e9) return "$" + (x / 1e9).toFixed(2) + "B";
+    if (Math.abs(x) >= 1e6) return "$" + (x / 1e6).toFixed(2) + "M";
+    if (Math.abs(x) >= 1e3) return "$" + (x / 1e3).toFixed(1) + "K";
+    return "$" + x.toFixed(2);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function dayText(ms) {
+    var d = new Date(ms);
+    return DAYS[d.getUTCDay()] + " " + d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear();
+  }
+  function dateText(ms) {
+    var d = new Date(ms);
+    return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear();
+  }
+  function isoText(ms) { return new Date(ms).toISOString().slice(0, 10); }
+  function monthText(ms) { var d = new Date(ms); return MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+
+  // "1,000,000" and "0.05" are read as written; "0,05" (comma as decimal) is read as 0.05.
+  function parseNumber(raw) {
+    var s = String(raw == null ? "" : raw).trim().replace(/[\s_]/g, "");
+    if (s === "") return NaN;
+    if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, "");
+    else if (/^-?\d*,\d+$/.test(s)) s = s.replace(",", ".");
+    if (!/^-?(\d+\.?\d*|\.\d+)$/.test(s)) return NaN;
+    return Number(s);
+  }
+
+  // ---------- calculation (same logic as cpu_line_purchasing_budget_2027.py) ----------
+  function orderDate(needMs, leadWeeks) {
+    var d = needMs - leadWeeks * 7 * DAY_MS;
+    var original = d;
+    while (new Date(d).getUTCDay() === 0 || new Date(d).getUTCDay() === 6) d -= DAY_MS;
+    return { ms: d, movedFrom: d !== original ? original : null };
+  }
+
+  function compute(inp) {
+    var items = inp.bom.map(function (b) { return { name: b.name, qty: b.qty, price: b.price, unit: b.qty * b.price }; });
+    var unitCost = items.reduce(function (s, i) { return s + i.unit; }, 0);
+
+    var base = Math.floor(inp.perQuarter / 3), extra = inp.perQuarter % 3;
+    var production = [];
+    for (var q = 0; q < 4; q++) for (var m = 0; m < 3; m++) production.push(m < extra ? base + 1 : base);
+    var annual = production.reduce(function (s, x) { return s + x; }, 0);
+    var safety = Math.ceil(inp.perQuarter / 13 * inp.safetyWeeks);
+    var purchaseSets = annual + safety;
+
+    var plan = [];
+    for (var i = 0; i < 13; i++) {
+      var y = inp.startYear + Math.floor((inp.startMonth + i) / 12);
+      var mo = (inp.startMonth + i) % 12;
+      var need = Date.UTC(y, mo, 1);
+      var po = orderDate(need, inp.leadWeeks);
+      if (i === 12) { plan.next = { need: need, po: po }; break; }
+      var sets = production[i] + (i === 0 ? safety : 0);
+      plan.push({ index: i, need: need, po: po, sets: sets, value: sets * unitCost, withSafety: i === 0 && safety > 0 });
+    }
+
+    var quarters = [];
+    for (var k = 0; k < 4; k++) {
+      var rows = plan.slice(k * 3, k * 3 + 3);
+      var qs = rows.reduce(function (s, r) { return s + r.sets; }, 0);
+      quarters.push({ label: "Q" + (k + 1), from: rows[0].need, to: rows[2].need, firstPo: rows[0].po.ms, sets: qs, value: qs * unitCost });
+    }
+
+    items.forEach(function (it) {
+      it.prodQty = annual * it.qty;
+      it.safetyQty = safety * it.qty;
+      it.totalQty = purchaseSets * it.qty;
+      it.budget = purchaseSets * it.unit;
+      it.share = unitCost > 0 ? it.unit / unitCost : 0;
+    });
+    var ranked = items.slice().sort(function (a, b) { return b.budget - a.budget; });
+    var cum = 0;
+    ranked.forEach(function (it) { it.isA = unitCost > 0 && cum < 0.8; cum += it.share; });
+
+    return {
+      items: items, ranked: ranked, unitCost: unitCost, annual: annual, safety: safety,
+      purchaseSets: purchaseSets, plan: plan, next: plan.next, quarters: quarters,
+      total: purchaseSets * unitCost, productionValue: annual * unitCost, safetyValue: safety * unitCost
+    };
+  }
+
+  // ---------- reading and checking the form ----------
+  function readForm() {
+    var rows = Array.prototype.map.call(document.querySelectorAll(".bom-row"), function (row) {
+      return {
+        id: row.dataset.id,
+        name: row.querySelector(".name-in").value,
+        qty: row.querySelector(".qty-in").value,
+        price: row.querySelector(".price-in").value
+      };
+    });
+    return {
+      product: $("product").value, startMonth: $("start-month").value, startYear: $("start-year").value,
+      perQuarter: $("per-quarter").value, leadWeeks: $("lead-weeks").value, safetyWeeks: $("safety-weeks").value, remindDays: $("remind-days").value,
+      bom: rows.map(function (r) { return { name: r.name, qty: r.qty, price: r.price }; }),
+      _rowIds: rows.map(function (r) { return r.id; })
+    };
+  }
+
+  function validate(raw) {
+    var errors = [];
+    var bad = [];
+    function fail(id, msg) { errors.push(msg); bad.push(id); }
+
+    var year = parseNumber(raw.startYear);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) fail("start-year", "Year: enter a year from 2000 to 2100.");
+    var perQuarter = parseNumber(raw.perQuarter);
+    if (!Number.isInteger(perQuarter) || perQuarter < 1 || perQuarter > 1e12) fail("per-quarter", "Production per quarter: enter a whole number of units above 0.");
+    var lead = parseNumber(raw.leadWeeks);
+    if (!Number.isInteger(lead) || lead < 0 || lead > 104) fail("lead-weeks", "Lead time: enter whole weeks from 0 to 104.");
+    var safety = parseNumber(raw.safetyWeeks);
+    if (!(safety >= 0 && safety <= 52)) fail("safety-weeks", "Safety stock: enter weeks from 0 to 52 (decimals are fine, for example 1.5).");
+    var remind = parseNumber(raw.remindDays);
+    if (!Number.isInteger(remind) || remind < 0 || remind > 60) fail("remind-days", "Reminder: enter whole days from 0 to 60.");
+
+    var bom = [];
+    if (raw.bom.length === 0) errors.push("Bill of material: add at least one item.");
+    raw.bom.forEach(function (b, i) {
+      var id = raw._rowIds[i];
+      var label = (b.name || "").trim() || "Item " + (i + 1);
+      var q = parseNumber(b.qty), p = parseNumber(b.price);
+      if (!(q > 0 && q <= 1e9)) fail("qty-" + id, label + ": enter a quantity above 0.");
+      if (!(p >= 0 && p <= 1e9)) fail("price-" + id, label + ": enter a price of 0 or more.");
+      bom.push({ name: label, qty: q, price: p });
+    });
+
+    return {
+      errors: errors, bad: bad,
+      input: {
+        product: (raw.product || "").trim() || "unit",
+        startMonth: Number(raw.startMonth) || 0, startYear: year, perQuarter: perQuarter,
+        leadWeeks: lead, safetyWeeks: safety, remindDays: remind, bom: bom
+      }
+    };
+  }
+
+  // ---------- rendering ----------
+  function table(headers, rows, leftCols) {
+    leftCols = leftCols || [0];
+    var h = "<table><thead><tr>" + headers.map(function (x, i) {
+      return "<th" + (leftCols.indexOf(i) >= 0 ? ' class="left"' : "") + ">" + x + "</th>";
+    }).join("") + "</tr></thead><tbody>";
+    rows.forEach(function (r) {
+      h += "<tr" + (r.cls ? ' class="' + r.cls + '"' : "") + ">" + r.cells.map(function (c, i) {
+        return "<td" + (leftCols.indexOf(i) >= 0 ? ' class="left"' : "") + ">" + c + "</td>";
+      }).join("") + "</tr>";
+    });
+    return h + "</tbody></table>";
+  }
+
+  function todayUtc() {
+    var n = new Date();
+    return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+
+  function render(r, inp) {
+    var P = esc(inp.product);
+    var today = todayUtc();
+    var first = r.plan[0];
+    var placed = loadPlaced();
+    var late = r.plan.filter(function (row) { return row.po.ms < today && !placed[monthKey(row.need)]; });
+
+    $("summary").innerHTML =
+      '<div class="lead"><dt>Total purchasing budget</dt><dd>$' + money(r.total) + "</dd></div>" +
+      "<div><dt>Material cost per " + P + "</dt><dd>$" + money(r.unitCost) + "</dd></div>" +
+      "<div><dt>First PO must be placed by</dt><dd>" + dayText(first.po.ms) + "</dd>" +
+        (first.po.ms < today && !placed[monthKey(first.need)] ? '<span class="chip warn">Date has passed</span>' : "") + "</div>" +
+      "<div><dt>" + P + " material sets to buy</dt><dd>" + qty(r.purchaseSets) + "</dd></div>";
+    $("summary-caption").textContent =
+      "$" + money(r.productionValue) + " for " + qty(r.annual) + " " + inp.product + " of production over 12 months, plus $" +
+      money(r.safetyValue) + " for " + qty(r.safety) + " sets of safety stock. Delivered in 12 monthly purchase orders.";
+
+    var bars = r.ranked.map(function (it) {
+      return '<div class="bar-row"><span class="name" title="' + esc(it.name) + '">' + esc(it.name) + '</span>' +
+        '<div class="bar-track"><div class="bar' + (it.isA ? " a" : "") + '" style="width:' + (it.share * 100).toFixed(2) + '%"></div></div>' +
+        '<div class="bar-val">' + pct(it.share) + " <span>" + short(it.budget) + "</span></div></div>";
+    }).join("");
+    bars += '<div class="axis" aria-hidden="true"><div></div><div class="ticks"><span style="left:0">0%</span><span style="left:25%">25%</span><span style="left:50%">50%</span><span style="left:75%">75%</span><span style="left:100%">100%</span></div><div></div></div>';
+    $("bars").innerHTML = bars;
+    $("bars").setAttribute("aria-label", "Share of the budget by item: " + r.ranked.map(function (it) { return it.name + " " + pct(it.share); }).join(", "));
+
+    $("items-table").innerHTML = table(
+      ["Item", "Qty per " + P, "Price USD", "For production", "Safety stock", "Total qty", "Budget USD", "Share"],
+      r.items.map(function (it) {
+        return { cells: [esc(it.name) + (it.isA ? '<span class="chip">A item</span>' : ""), qty(it.qty), esc(String(it.price)), qty(it.prodQty), qty(it.safetyQty), qty(it.totalQty), money(it.budget), pct(it.share)] };
+      }).concat([{ cls: "total", cells: ["Total", "", "", "", "", "", money(r.total), pct(1)] }])
+    );
+
+    var poHead = ["PO", "Status", "Placed", "Place PO by", "Arrives by", "For production", "Sets"].concat(r.items.map(function (it) { return esc(it.name); }), ["Value USD", "Notice"]);
+    var poRows = r.plan.map(function (row) {
+      var st = orderStatus(row, today, inp.remindDays, placed);
+      var key = monthKey(row.need), name = poName(row.index);
+      var chips = "";
+      if (row.withSafety) chips += '<span class="chip">+ safety stock</span>';
+      if (row.po.movedFrom !== null) chips += '<span class="chip copper">' + movedText(row.po.movedFrom) + "</span>";
+      return { cls: st.kind === "placed" ? "done" : "", cells: [name, statusChip(st),
+          '<input type="checkbox" class="placed-box" id="placed-' + key + '" data-key="' + key + '" aria-label="' + name + ' placed"' + (st.kind === "placed" ? " checked" : "") + ">",
+          dayText(row.po.ms) + chips, dateText(row.need), monthText(row.need), qty(row.sets)]
+        .concat(r.items.map(function (it) { return qty(row.sets * it.qty); }), [money(row.value),
+          '<button type="button" class="btn small" data-notice="' + row.index + '">A4 notice</button>']) };
+    });
+    poRows.push({ cls: "total", cells: ["Total", "", "", "", "", "", qty(r.purchaseSets)].concat(r.items.map(function (it) { return qty(it.totalQty); }), [money(r.total), ""]) });
+    $("po-table").innerHTML = table(poHead, poRows, [0, 1, 3]);
+    renderAlert(r, inp, today, placed);
+
+    var cap = "Each order must arrive by the first day of its production month. ";
+    cap += "To keep the line running after these 12 months, place the next order (for " + monthText(r.next.need) + ") by " + dayText(r.next.po.ms) + ".";
+    if (late.length) cap += " " + late.length + (late.length === 1 ? " order date has" : " order dates have") + " already passed: order now and expedite, or start production later.";
+    $("po-caption").textContent = cap;
+
+    $("quarter-table").innerHTML = table(
+      ["Quarter", "Months", "First PO by", "Sets", "Budget USD"],
+      r.quarters.map(function (q) {
+        return { cells: [q.label, monthText(q.from).slice(0, 3) + "–" + monthText(q.to), dateText(q.firstPo), qty(q.sets), money(q.value)] };
+      }).concat([{ cls: "total", cells: ["Total", "", "", qty(r.purchaseSets), money(r.total)] }])
+    );
+  }
+
+  // ---------- order status and reminders ----------
+  function poName(i) { return "PO-" + String(i + 1).padStart(2, "0"); }
+  function monthKey(ms) { return isoText(ms).slice(0, 7); }
+  function movedText(ms) { return "from " + dayText(ms).replace(/ \d{4}$/, ""); }
+
+  // Orders marked as placed, keyed by production month ("2027-01"); kept in memory if storage is blocked.
+  function loadPlaced() {
+    if (placedMap) return placedMap;
+    try { placedMap = JSON.parse(localStorage.getItem(PLACED_KEY) || "{}") || {}; } catch (e) { placedMap = {}; }
+    return placedMap;
+  }
+  function setPlaced(key, on) {
+    var map = loadPlaced();
+    if (on) map[key] = true; else delete map[key];
+    try { localStorage.setItem(PLACED_KEY, JSON.stringify(map)); } catch (e) {}
+  }
+
+  function daysText(d) {
+    if (d > 1) return "in " + d + " days";
+    if (d === 1) return "tomorrow";
+    if (d === 0) return "today";
+    if (d === -1) return "1 day late";
+    return -d + " days late";
+  }
+  function orderStatus(row, today, remindDays, placed) {
+    var d = Math.round((row.po.ms - today) / DAY_MS);
+    if (placed[monthKey(row.need)]) return { kind: "placed", days: d, label: "Placed" };
+    if (d < 0) return { kind: "late", days: d, label: daysText(d) };
+    if (d === 0) return { kind: "today", days: d, label: "Order today" };
+    if (d <= remindDays) return { kind: "soon", days: d, label: "Due " + daysText(d) };
+    return { kind: "later", days: d, label: "In " + d + " days" };
+  }
+  function statusChip(st) {
+    var cls = { placed: "done", late: "warn", today: "warn", soon: "soon", later: "later" }[st.kind];
+    return '<span class="chip ' + cls + '">' + st.label + "</span>";
+  }
+
+  function renderAlert(r, inp, today, placed) {
+    var rows = r.plan.map(function (row) { return { row: row, st: orderStatus(row, today, inp.remindDays, placed) }; });
+    var due = rows.filter(function (x) { return x.st.kind === "late" || x.st.kind === "today" || x.st.kind === "soon"; });
+    var open = rows.filter(function (x) { return x.st.kind !== "placed"; });
+    function line(x) {
+      return "<li><span><strong>" + poName(x.row.index) + "</strong> · place by " + dayText(x.row.po.ms) + " · $" + money(x.row.value) + " " + statusChip(x.st) +
+        '</span><button type="button" class="btn small" data-notice="' + x.row.index + '">Open A4 notice</button></li>';
+    }
+    var box = $("alert"), html;
+    if (due.length) {
+      var urgent = due.some(function (x) { return x.st.kind !== "soon"; });
+      box.className = "alert " + (urgent ? "late" : "soon");
+      html = '<strong class="alert-title">' + (due.length === 1 ? "1 order to place now" : due.length + " orders to place now") + "</strong>" +
+        "<p>Place the order, then tick Placed in the schedule below.</p><ul>" + due.map(line).join("") + "</ul>";
+    } else if (open.length) {
+      var n = open[0];
+      box.className = "alert ok";
+      html = '<strong class="alert-title">Next order: ' + poName(n.row.index) + ", " + daysText(n.st.days) + "</strong>" +
+        "<p>It shows here as due " + inp.remindDays + (inp.remindDays === 1 ? " day" : " days") + " before its date. To be notified when this page is closed, add the reminders to your calendar.</p>" +
+        "<ul>" + line(n) + "</ul>";
+    } else {
+      box.className = "alert ok";
+      html = '<strong class="alert-title">All 12 orders are marked as placed.</strong>';
+    }
+    box.innerHTML = html;
+  }
+
+  // ---------- calendar file (.ics) ----------
+  function icsText(s) { return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n"); }
+  function icsFold(line) {
+    var enc = new TextEncoder(), out = "", cur = "", bytes = 0;
+    for (var ch of line) {
+      var b = enc.encode(ch).length;
+      if (bytes + b > 75) { out += cur + "\r\n"; cur = " "; bytes = 1; }
+      cur += ch; bytes += b;
+    }
+    return out + cur;
+  }
+  function icsDate(ms) { return isoText(ms).replace(/-/g, ""); }
+  function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "product"; }
+  function buildIcs(r, inp, today, placed, pageUrl) {
+    var stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BOM Purchasing Planner//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+      "X-WR-CALNAME:" + icsText(inp.product + " purchase orders")];
+    var count = 0;
+    r.plan.forEach(function (row) {
+      if (placed[monthKey(row.need)] || row.po.ms < today) return;
+      count++;
+      var name = poName(row.index);
+      var desc = "Latest day to place " + name + " so the material arrives by " + dateText(row.need) + " for " + monthText(row.need) + " production.\n\n" +
+        "Items to order (" + qty(row.sets) + " " + inp.product + " sets):\n" +
+        r.items.map(function (it) { return "- " + it.name + ": " + qty(row.sets * it.qty) + " x $" + it.price + " = $" + money(row.sets * it.unit); }).join("\n") +
+        "\n\nOrder value: $" + money(row.value) +
+        (/^https?:/.test(pageUrl) ? "\n\nA4 order notice: " + pageUrl + "#" + name.toLowerCase() : "");
+      lines.push("BEGIN:VEVENT",
+        "UID:" + slug(inp.product) + "-" + monthKey(row.need) + "@bom-purchasing-planner",
+        "DTSTAMP:" + stamp,
+        "DTSTART;VALUE=DATE:" + icsDate(row.po.ms),
+        "DTEND;VALUE=DATE:" + icsDate(row.po.ms + DAY_MS),
+        "SUMMARY:" + icsText("Place " + name + ": " + inp.product + " material for " + monthText(row.need) + " ($" + money(row.value) + ")"),
+        "DESCRIPTION:" + icsText(desc),
+        "TRANSP:TRANSPARENT");
+      // All-day events start at 00:00, so -P(N-1)DT15H fires at 09:00 N days before, and PT9H at 09:00 on the day.
+      if (inp.remindDays > 0) {
+        lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsText("Place " + name + " " + daysText(inp.remindDays)),
+          "TRIGGER:" + (inp.remindDays === 1 ? "-PT15H" : "-P" + (inp.remindDays - 1) + "DT15H"), "END:VALARM");
+      }
+      lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsText("Place " + name + " today"), "TRIGGER:PT9H", "END:VALARM", "END:VEVENT");
+    });
+    lines.push("END:VCALENDAR");
+    return { text: lines.map(icsFold).join("\r\n") + "\r\n", count: count };
+  }
+  function downloadIcs() {
+    if (!lastResult) return;
+    var status = $("ics-status");
+    var out = buildIcs(lastResult, lastInput, todayUtc(), loadPlaced(), location.href.split("#")[0]);
+    if (!out.count) { status.textContent = "No upcoming orders to add. Orders marked as placed or past their date are left out."; return; }
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([out.text], { type: "text/calendar;charset=utf-8" }));
+    a.download = "po-reminders-" + slug(lastInput.product) + ".ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    status.textContent = out.count + (out.count === 1 ? " order" : " orders") + " saved to " + a.download + ". Open the file to add them to your calendar.";
+  }
+
+  // ---------- A4 order notice ----------
+  function noticeHtml(i) {
+    var r = lastResult, inp = lastInput, row = r.plan[i], today = todayUtc(), placed = loadPlaced();
+    var st = orderStatus(row, today, inp.remindDays, placed);
+    var P = esc(inp.product), name = poName(i);
+    var stampText = { placed: "Placed", late: "Overdue", today: "Order today", soon: "Due soon", later: "Upcoming" }[st.kind];
+    var placedCount = r.plan.filter(function (x) { return placed[monthKey(x.need)]; }).length;
+    var committed = r.plan.reduce(function (s, x) { return s + (placed[monthKey(x.need)] ? x.value : 0); }, 0);
+    var segs = r.plan.map(function (x) {
+      var s2 = orderStatus(x, today, inp.remindDays, placed);
+      return '<span class="seg ' + s2.kind + (x.index === i ? " current" : "") + '" title="' + poName(x.index) + ": " + s2.label + '">' + (x.index + 1) + "</span>";
+    }).join("");
+    var next = r.plan[i + 1] || null;
+    var notes = ["The material must arrive by " + dayText(row.need) + ", the first day of " + monthText(row.need) + " production. Lead time used: " + inp.leadWeeks + " weeks."];
+    if (row.withSafety) notes.push("This order includes " + qty(r.safety) + " sets of safety stock (" + inp.safetyWeeks + (inp.safetyWeeks === 1 ? " week" : " weeks") + " of usage). Keep it on hand all year.");
+    if (row.po.movedFrom !== null) notes.push("The order date was moved back from " + dayText(row.po.movedFrom) + " because that day is a weekend.");
+    notes.push(next ? "Next order: " + poName(next.index) + ", place by " + dayText(next.po.ms) + "." :
+      "Next order (" + monthText(r.next.need) + " production): place by " + dayText(r.next.po.ms) + ".");
+    var itemRows = r.items.map(function (it, k) {
+      var amt = row.sets * it.unit, share = row.value > 0 ? amt / row.value : 0;
+      return "<tr><td>" + (k + 1) + '</td><td class="left">' + esc(it.name) + "</td><td>" + qty(it.qty) + "</td><td>" + qty(row.sets * it.qty) + "</td><td>" + esc(String(it.price)) +
+        "</td><td>" + money(amt) + '</td><td><span class="mini"><span style="width:' + (share * 100).toFixed(1) + '%"></span></span>' + pct(share) + "</td></tr>";
+    }).join("");
+    var pageUrl = location.href.split("#")[0];
+    return '<header class="n-head"><div><div class="n-eyebrow">Purchase order release notice</div>' +
+        "<h1>" + name + " · " + P + " material for " + monthText(row.need) + "</h1>" +
+        '<p class="n-sub">Release from the annual blanket purchase order. Generated ' + dayText(today) + ".</p></div>" +
+        '<div class="stamp ' + st.kind + '"><span>' + stampText + "</span><small>" + (st.kind === "placed" ? "Order sent" : daysText(st.days)) + "</small></div></header>" +
+      '<dl class="n-tiles">' +
+        '<div class="key"><dt>Place PO by</dt><dd>' + dayText(row.po.ms) + "</dd><small>" + daysText(st.days) + "</small></div>" +
+        "<div><dt>Arrives by</dt><dd>" + dayText(row.need) + "</dd><small>start of " + monthText(row.need) + " production</small></div>" +
+        "<div><dt>Order value</dt><dd>$" + money(row.value) + "</dd><small>" + pct(r.total > 0 ? row.value / r.total : 0) + " of the 12-month budget</small></div>" +
+        "<div><dt>Material sets</dt><dd>" + qty(row.sets) + "</dd><small>" + (row.withSafety ? "incl. " + qty(r.safety) + " safety stock" : "for " + monthText(row.need)) + "</small></div>" +
+        "<div><dt>Items on order</dt><dd>" + r.items.length + "</dd><small>$" + money(r.unitCost) + " material per " + P + "</small></div>" +
+        "<div><dt>Lead time</dt><dd>" + inp.leadWeeks + " weeks</dd><small>reminder " + inp.remindDays + (inp.remindDays === 1 ? " day" : " days") + " before</small></div>" +
+      "</dl>" +
+      '<section class="n-progress"><div class="n-row"><h2>12-month plan</h2><span>' + placedCount + " of 12 orders placed · $" + money(committed) + " of $" + money(r.total) + " committed</span></div>" +
+        '<div class="segs">' + segs + '</div><div class="n-bar"><span style="width:' + (r.total > 0 ? committed / r.total * 100 : 0).toFixed(1) + '%"></span></div></section>' +
+      '<section class="n-items"><h2>Items to order</h2><div class="tbl"><table><thead><tr><th>#</th><th class="left">Item</th><th>Qty per ' + P +
+        "</th><th>Order qty</th><th>Unit price USD</th><th>Amount USD</th><th>Share</th></tr></thead><tbody>" + itemRows +
+        '<tr class="total"><td></td><td class="left">Total</td><td></td><td>' + qty(row.sets) + " sets</td><td></td><td>" + money(row.value) + "</td><td>" + pct(row.value > 0 ? 1 : 0) + "</td></tr></tbody></table></div></section>" +
+      '<section class="n-notes"><h2>Notes</h2><ul>' + notes.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul></section>" +
+      '<section class="n-fill"><h2>To fill in when ordering</h2><div class="fill-grid"><div><span>Supplier</span></div><div><span>PO number</span></div>' +
+        '<div><span>Delivery date confirmed by supplier</span></div><div><span>Remarks</span></div></div></section>' +
+      '<section class="n-sign"><div><span>Prepared by (name, date)</span></div><div><span>Checked by (name, date)</span></div><div><span>Approved by (name, date)</span></div></section>' +
+      '<footer class="n-foot"><span>BOM Purchasing Planner · ' + name + " of 12</span><span>" + (/^https?:/.test(pageUrl) ? esc(pageUrl) : "") + "</span></footer>";
+  }
+  function showNotice(i) {
+    if (!lastResult || !(i >= 0 && i <= 11)) return;
+    var opening = noticeIndex === null;
+    if (opening) returnScroll = window.scrollY;
+    noticeIndex = i;
+    $("notice-sheet").innerHTML = noticeHtml(i);
+    $("notice-title").textContent = poName(i) + " order notice";
+    $("notice-prev").disabled = i === 0;
+    $("notice-next").disabled = i === 11;
+    $("notice-view").hidden = false;
+    document.body.classList.add("notice-open");
+    try { history.replaceState(null, "", "#" + poName(i).toLowerCase()); } catch (e) {}
+    if (opening) window.scrollTo(0, 0);
+  }
+  function closeNotice() {
+    noticeIndex = null;
+    $("notice-view").hidden = true;
+    document.body.classList.remove("notice-open");
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    window.scrollTo(0, returnScroll);
+  }
+
+  // ---------- copy for Excel (tab-separated) ----------
+  function tsvItems(r) {
+    var lines = [["Item", "Qty per unit", "Price USD", "For production", "Safety stock", "Total qty", "Budget USD"].join("\t")];
+    r.items.forEach(function (it) { lines.push([it.name, it.qty, it.price, it.prodQty, it.safetyQty, it.totalQty, it.budget.toFixed(2)].join("\t")); });
+    lines.push(["Total", "", "", "", "", "", r.total.toFixed(2)].join("\t"));
+    return lines.join("\n");
+  }
+  function tsvPo(r) {
+    var lines = [["PO", "Place PO by", "Arrives by", "Sets"].concat(r.items.map(function (it) { return it.name; }), ["Value USD"]).join("\t")];
+    r.plan.forEach(function (row) {
+      lines.push(["PO-" + String(row.index + 1).padStart(2, "0"), isoText(row.po.ms), isoText(row.need), row.sets]
+        .concat(r.items.map(function (it) { return +(row.sets * it.qty).toFixed(4); }), [row.value.toFixed(2)]).join("\t"));
+    });
+    return lines.join("\n");
+  }
+  function copyText(text, statusId, fallbackId) {
+    var status = $(statusId), fb = $(fallbackId);
+    function fallback() {
+      fb.value = text; fb.hidden = false; fb.focus(); fb.select();
+      status.textContent = "Text selected below. Press Ctrl+C or Cmd+C, then paste into Excel.";
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        fb.hidden = true; status.textContent = "Copied. Paste into Excel.";
+      }, fallback);
+    } else { fallback(); }
+  }
+
+  // ---------- BOM rows ----------
+  function rowHtml(id, b) {
+    return '<div class="bom-row" data-id="' + id + '">' +
+      '<input class="name-in" id="name-' + id + '" type="text" autocomplete="off" maxlength="40" aria-label="Item name" value="' + esc(b.name) + '">' +
+      '<input class="qty-in n" id="qty-' + id + '" type="text" inputmode="decimal" autocomplete="off" aria-label="Quantity per unit for ' + esc(b.name || "item") + '" value="' + esc(b.qty) + '">' +
+      '<input class="price-in n" id="price-' + id + '" type="text" inputmode="decimal" autocomplete="off" aria-label="Price in USD for ' + esc(b.name || "item") + '" value="' + esc(b.price) + '">' +
+      '<button type="button" class="icon-btn remove" aria-label="Remove ' + esc(b.name || "item") + '" title="Remove item">×</button></div>';
+  }
+  function renderBom(bom) {
+    $("bom-list").innerHTML = bom.map(function (b) { return rowHtml(nextRowId++, b); }).join("");
+    updateRemoveButtons();
+  }
+  function updateRemoveButtons() {
+    var btns = document.querySelectorAll(".bom-row .remove");
+    Array.prototype.forEach.call(btns, function (b) { b.disabled = btns.length <= 1; });
+  }
+
+  function fillForm(s) {
+    $("product").value = s.product;
+    $("start-month").value = s.startMonth;
+    $("start-year").value = s.startYear;
+    $("per-quarter").value = s.perQuarter;
+    $("lead-weeks").value = s.leadWeeks;
+    $("safety-weeks").value = s.safetyWeeks;
+    $("remind-days").value = s.remindDays != null ? s.remindDays : "7";
+    renderBom(s.bom);
+  }
+
+  function isExample(s) {
+    return JSON.stringify({ a: s.product, b: s.startMonth, c: s.startYear, d: s.perQuarter, e: s.leadWeeks, f: s.safetyWeeks, g: s.bom }) ===
+      JSON.stringify({ a: EXAMPLE.product, b: EXAMPLE.startMonth, c: EXAMPLE.startYear, d: EXAMPLE.perQuarter, e: EXAMPLE.leadWeeks, f: EXAMPLE.safetyWeeks, g: EXAMPLE.bom });
+  }
+
+  // ---------- update cycle ----------
+  function update() {
+    var raw = readForm();
+    state = { product: raw.product, startMonth: raw.startMonth, startYear: raw.startYear, perQuarter: raw.perQuarter, leadWeeks: raw.leadWeeks, safetyWeeks: raw.safetyWeeks, remindDays: raw.remindDays, bom: raw.bom };
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    $("example-note").hidden = !isExample(state);
+
+    var v = validate(raw);
+    Array.prototype.forEach.call(document.querySelectorAll("#inputs input"), function (el) {
+      if (v.bad.indexOf(el.id) >= 0) el.setAttribute("aria-invalid", "true"); else el.removeAttribute("aria-invalid");
+    });
+    var label = esc(v.input.product);
+    Array.prototype.forEach.call(document.querySelectorAll(".product-label"), function (el) { el.innerHTML = label; });
+    $("legend-product").innerHTML = label;
+
+    var errBox = $("errors");
+    if (v.errors.length) {
+      errBox.innerHTML = "<strong>Check " + v.errors.length + (v.errors.length === 1 ? " field" : " fields") + "." +
+        (lastResult ? " The tables below show the last valid result." : "") + "</strong><ul>" +
+        v.errors.map(function (e) { return "<li>" + esc(e) + "</li>"; }).join("") + "</ul>";
+      errBox.hidden = false;
+      $("results").classList.toggle("stale", !!lastResult);
+      $("unit-cost").textContent = "–";
+      return;
+    }
+    errBox.hidden = true;
+    $("results").classList.remove("stale");
+    lastResult = compute(v.input);
+    lastInput = v.input;
+    $("unit-cost").textContent = "$" + money(lastResult.unitCost);
+    render(lastResult, v.input);
+    if (noticeIndex !== null) showNotice(noticeIndex);
+  }
+
+  function loadStored() {
+    try {
+      var s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      if (s && Array.isArray(s.bom)) return s;
+    } catch (e) {}
+    return null;
+  }
+
+  function start(hotData) {
+    var initial = (hotData && hotData.state) || loadStored() || EXAMPLE;
+    fillForm(initial);
+
+    var form = $("inputs");
+    form.addEventListener("input", update);
+    form.addEventListener("change", update);
+    form.addEventListener("submit", function (e) { e.preventDefault(); });
+
+    $("add-item").addEventListener("click", function () {
+      var id = nextRowId++;
+      $("bom-list").insertAdjacentHTML("beforeend", rowHtml(id, { name: "", qty: "1", price: "" }));
+      updateRemoveButtons();
+      $("name-" + id).focus();
+      update();
+    });
+    $("bom-list").addEventListener("click", function (e) {
+      var btn = e.target.closest(".remove");
+      if (!btn || btn.disabled) return;
+      btn.closest(".bom-row").remove();
+      updateRemoveButtons();
+      update();
+    });
+
+    var armTimer = null;
+    $("po-table").addEventListener("change", function (e) {
+      var box = e.target.closest(".placed-box");
+      if (!box) return;
+      var key = box.dataset.key;
+      setPlaced(key, box.checked);
+      update();
+      var again = $("placed-" + key);
+      if (again) again.focus();
+    });
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-notice]");
+      if (b) showNotice(Number(b.dataset.notice));
+    });
+    $("download-ics").addEventListener("click", downloadIcs);
+    $("notice-close").addEventListener("click", closeNotice);
+    $("notice-prev").addEventListener("click", function () { showNotice(noticeIndex - 1); });
+    $("notice-next").addEventListener("click", function () { showNotice(noticeIndex + 1); });
+    $("notice-print").addEventListener("click", function () { window.print(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && noticeIndex !== null) closeNotice(); });
+
+    $("load-example").addEventListener("click", function () {
+      var btn = this;
+      if (isExample(state) || btn.classList.contains("armed")) {
+        clearTimeout(armTimer);
+        btn.classList.remove("armed");
+        btn.textContent = "Load the CPU example";
+        fillForm(EXAMPLE);
+        update();
+        return;
+      }
+      btn.classList.add("armed");
+      btn.textContent = "Click again to replace your numbers";
+      armTimer = setTimeout(function () { btn.classList.remove("armed"); btn.textContent = "Load the CPU example"; }, 4000);
+    });
+
+    $("copy-items").addEventListener("click", function () { if (lastResult) copyText(tsvItems(lastResult), "copy-items-status", "copy-items-fallback"); });
+    $("copy-po").addEventListener("click", function () { if (lastResult) copyText(tsvPo(lastResult), "copy-po-status", "copy-po-fallback"); });
+
+    if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
+      try { window.claude.hot.snapshot(function () { return { state: state }; }); } catch (e) {}
+    }
+    update();
+    var hash = /^#po-(\d{2})$/.exec(location.hash);
+    if (hash) showNotice(Number(hash[1]) - 1);
+  }
+
+  if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start);
+  else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
+
+  // exposed for a quick self-check
+  window.__bomPlanner = { compute: compute, parseNumber: parseNumber, buildIcs: buildIcs, orderStatus: orderStatus };
+})();
+</script>
+
+</body>
+</html>
